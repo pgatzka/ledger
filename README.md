@@ -79,8 +79,23 @@ LLM_PROVIDER=ollama npm run dev  # or set OLLAMA_MODEL / OLLAMA_URL in .env.loca
 
 Quality depends on the model — small local models route and structure less reliably than
 Claude, so expect more Inbox/flag outcomes. Both the Route and Operate stages use the same
-`OLLAMA_MODEL`. For Docker, set `OLLAMA_URL=http://host.docker.internal:11434` so the
-container can reach Ollama on the host.
+`OLLAMA_MODEL`.
+
+**Fully local with Docker Compose** — the included `compose.yaml` ships an optional `ollama`
+service (behind the `ollama` profile). To run the app and Ollama together with no API key:
+
+```bash
+# 1. Uncomment the LLM_PROVIDER / OLLAMA_* lines under `app` in compose.yaml
+# 2. Start both services (the profile enables the ollama service):
+docker compose --profile ollama up -d --build
+# 3. Pull a model into the ollama container (one-time):
+docker compose exec ollama ollama pull llama3.1:8b
+# → http://localhost:3000
+```
+
+The app reaches Ollama at `http://ollama:11434` (the compose service name); models persist
+on the `ollama-models` volume. To use an Ollama already running on your **host** instead of
+the bundled service, set `OLLAMA_URL=http://host.docker.internal:11434` and skip the profile.
 
 ### Environment
 
@@ -166,13 +181,28 @@ services:
     build: .                        # or: image: ghcr.io/pgatzka/ledger:latest
     ports: ["3000:3000"]
     environment:
+      # Local Ollama (uncomment; run with `--profile ollama`):
+      # LLM_PROVIDER: ollama
+      # OLLAMA_URL: http://ollama:11434
+      # OLLAMA_MODEL: llama3.1:8b
+      # Anthropic (default) — set ONE:
       ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}   # subscription usage, or…
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}         # …API credits (set one)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}         # …API credits
     volumes:
       - ledger-data:/app/data       # persists the SQLite DB across restarts
     restart: unless-stopped
+
+  ollama:                           # optional local model server (profile-gated)
+    image: ollama/ollama
+    profiles: ["ollama"]
+    ports: ["11434:11434"]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   ledger-data:
+  ollama-models:
 ```
 
 Stop with `docker compose down` (the `ledger-data` volume — and your docs — persist);
