@@ -33,14 +33,18 @@ Undo affordance; ambiguous thoughts wait in the Inbox.
   markdown doc pane (`src/app`).
 - **SQLite** via `better-sqlite3` (`db/schema.sql`, `src/lib/db.ts`) — projects,
   the immutable thought log, and version snapshots.
-- **Anthropic API** (`src/lib/anthropic.ts`) — structured JSON via forced tool
-  use. Haiku for cheap routing, Sonnet for the operations decision.
+- **Pluggable LLM providers** (`src/lib/llm.ts` selects by `LLM_PROVIDER`) — either
+  **Anthropic** (`src/lib/anthropic.ts`, structured JSON via forced tool use; Haiku
+  routes, Sonnet operates) or **local Ollama** (`src/lib/ollama.ts`, `/api/chat` with
+  a JSON-schema `format`). Both are held to the same response contract
+  (`src/lib/schemas.ts`), so the pipeline is provider-agnostic.
 
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local     # then add ONE Anthropic credential (see Auth below)
+cp .env.example .env.local     # then pick an LLM backend: an Anthropic credential
+                               # (see Auth) OR local Ollama (see below) — one is required
 npm run dev                     # http://localhost:3000
 ```
 
@@ -102,7 +106,7 @@ the bundled service, set `OLLAMA_URL=http://host.docker.internal:11434` and skip
 | Variable | Default | Purpose |
 |---|---|---|
 | `ANTHROPIC_AUTH_TOKEN` | — | Claude subscription token (`claude setup-token`). Preferred if set — see Auth above. |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key. Used if no auth token is set. One of the two is required. |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key. Used if no auth token is set. One Anthropic credential is required **when using the Anthropic provider** (not needed with Ollama). |
 | `ROUTE_MODEL` | `claude-haiku-4-5-20251001` | Cheap routing classification. |
 | `OPERATE_MODEL` | `claude-sonnet-5` | The document-editing decision. |
 | `ROUTE_CONFIDENCE_THRESHOLD` | `0.6` | Below this, thoughts go to the Inbox. |
@@ -132,9 +136,13 @@ no jest/vitest, no extra dependencies. Requires Node 22.
   move/flag, immutability, provenance, missing-id resilience, markdown output).
 - `test/repo.test.ts` — SQLite persistence against a temp DB: project CRUD, the
   immutable-log invariant, and version snapshots + undo.
+- `test/ollama.test.ts` — the Ollama provider against a stand-in `/api/chat` server:
+  `route()` / `decideOperations()` JSON parsing and the unreachable-server error path.
 - `test/pipeline.test.ts` — full capture→route→operate→apply loop. Makes live
   Anthropic calls, so it **auto-skips unless `ANTHROPIC_API_KEY` is set** (runs
   locally with a key; skipped in CI).
+
+The suite is offline and deterministic (16 pass, 1 skipped without a key).
 
 CI runs on every push and PR (`.github/workflows/ci.yml`): `npm ci` → lint →
 test → build, on Node 22. It's fully offline and needs no secrets. To un-skip the
@@ -144,14 +152,15 @@ uncomment the `env` block in the workflow.
 ## Deploy (Docker → GHCR)
 
 CD (`.github/workflows/cd.yml`) builds a production Docker image and publishes it to
-GitHub Container Registry on every push to `main`/the working branch and on `v*` tags
-(gated on the test suite passing). No external account or secret is required — it uses
-the built-in `GITHUB_TOKEN`.
+GitHub Container Registry on push to `main` and on `v*` tags (gated on the test suite
+passing). No external account or secret is required — it uses the built-in `GITHUB_TOKEN`.
 
 Image: `ghcr.io/pgatzka/ledger`. Tags: branch name, `sha-<short>`, `latest` (default
 branch), and the semver on version tags.
 
-Run it with a mounted volume for the SQLite database and your API key:
+Run it with a mounted volume for the SQLite database and one LLM credential — an API
+key (below), a subscription token (`ANTHROPIC_AUTH_TOKEN`), or point it at Ollama (see
+Auth and the Ollama section):
 
 ```bash
 docker run -p 3000:3000 \
