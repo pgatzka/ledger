@@ -1,0 +1,30 @@
+# Run Thought-to-Docs with Docker Compose.
+#
+#   echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+#   docker compose up --build          # http://localhost:3000  (add -d to detach)
+#
+# The SQLite database lives on the named `ledger-data` volume, so it survives
+# `docker compose down` and restarts.
+
+services:
+  app:
+    # Build the image from this repo. To run the published image instead,
+    # comment out `build` and uncomment `image`:
+    build: .
+    # image: ghcr.io/pgatzka/ledger:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # Required — provided via a local .env file (auto-loaded by Compose).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?create a .env file with ANTHROPIC_API_KEY}
+      # Optional overrides (defaults are baked into the image):
+      # ROUTE_MODEL: claude-haiku-4-5-20251001
+      # OPERATE_MODEL: claude-sonnet-5
+      # ROUTE_CONFIDENCE_THRESHOLD: "0.6"
+    volumes:
+      # Persists /app/data/ledger.db (DATABASE_PATH is preset in the image).
+      - ledger-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  ledger-data:

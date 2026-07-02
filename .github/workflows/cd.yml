@@ -2,7 +2,7 @@ name: CD
 
 on:
   push:
-    branches: ["main", "claude/thought-to-docs-design-85krm6"]
+    branches: ["main"]
     tags: ["v*"]
   workflow_dispatch:
 

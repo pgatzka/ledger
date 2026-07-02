@@ -110,6 +110,34 @@ The image is a slim Next.js `standalone` build; the DB lives at `/app/data/ledge
 on the volume (`DATABASE_PATH` is preset). The GHCR package is **private by default** —
 make it public in the repo's Packages settings if you want unauthenticated pulls.
 
+### Docker Compose
+
+A ready-to-run `compose.yaml` is included. It builds the image from this repo (swap in
+the published `image:` line to pull from GHCR instead), mounts a named volume for the DB,
+and reads your key from a local `.env`:
+
+```bash
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env   # auto-loaded by Compose
+docker compose up --build                    # add -d to detach → http://localhost:3000
+```
+
+```yaml
+services:
+  app:
+    build: .                        # or: image: ghcr.io/pgatzka/ledger:latest
+    ports: ["3000:3000"]
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?create a .env file with ANTHROPIC_API_KEY}
+    volumes:
+      - ledger-data:/app/data       # persists the SQLite DB across restarts
+    restart: unless-stopped
+volumes:
+  ledger-data:
+```
+
+Stop with `docker compose down` (the `ledger-data` volume — and your docs — persist);
+add `-v` only if you want to wipe the database.
+
 This publishes a deployable artifact; it doesn't stand up a live URL on its own. A
 `deploy` step (Fly.io / Render / SSH to a host with the volume) can be appended to the
 CD workflow once a host is chosen.
