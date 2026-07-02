@@ -7,7 +7,7 @@ import path from "node:path";
 // route modules concurrently and contend on the SQLite file. Deferring the open
 // to the first real query keeps it out of the build's page-data collection.
 declare global {
-  // eslint-disable-next-line no-var
+  // `var` is required here for global augmentation.
   var __ledgerDb: Database.Database | undefined;
 }
 

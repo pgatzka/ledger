@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "node --experimental-strip-types --import ./test/register-hooks.mjs --test 'test/*.test.ts'",
     "test:watch": "node --experimental-strip-types --import ./test/register-hooks.mjs --test --watch 'test/*.test.ts'"
   },
@@ -20,10 +20,13 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.20",
     "typescript": "^5.7.0"
   }
 }
