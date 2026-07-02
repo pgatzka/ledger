@@ -64,6 +64,29 @@ npm run dev                     # http://localhost:3000
 3. Click **Undo** on a change → the doc reverts and the thought returns to the
    Inbox. The raw thought log is never lost.
 
+## Tests & CI
+
+```bash
+npm test          # run the suite
+npm run test:watch
+```
+
+Uses Node's built-in test runner (`node --test`) with TypeScript type-stripping —
+no jest/vitest, no extra dependencies. Requires Node 22.
+
+- `test/tree.test.ts` — the deterministic operation engine (create/append/revise/
+  move/flag, immutability, provenance, missing-id resilience, markdown output).
+- `test/repo.test.ts` — SQLite persistence against a temp DB: project CRUD, the
+  immutable-log invariant, and version snapshots + undo.
+- `test/pipeline.test.ts` — full capture→route→operate→apply loop. Makes live
+  Anthropic calls, so it **auto-skips unless `ANTHROPIC_API_KEY` is set** (runs
+  locally with a key; skipped in CI).
+
+CI runs on every push and PR (`.github/workflows/ci.yml`): `npm ci` → lint →
+test → build, on Node 22. It's fully offline and needs no secrets. To un-skip the
+pipeline integration test in CI, add an `ANTHROPIC_API_KEY` repository secret and
+uncomment the `env` block in the workflow.
+
 ## Roadmap (not in the MVP)
 
 Outline-first retrieval for large docs, a clarifying-question loop, a provenance

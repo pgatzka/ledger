@@ -132,8 +132,10 @@ export function snapshotVersion(projectId: string, thoughtId: string | null, tre
  * reverted so the caller can move it back to the Inbox.
  */
 export function undoLast(projectId: string): { revertedThoughtId: string | null } | null {
+  // Tiebreak on rowid (monotonic insertion order) so rapid snapshots that share
+  // a millisecond timestamp still undo in true recency order.
   const versions = db
-    .prepare("SELECT * FROM versions WHERE project_id = ? ORDER BY created_at DESC")
+    .prepare("SELECT * FROM versions WHERE project_id = ? ORDER BY created_at DESC, rowid DESC")
     .all(projectId) as VersionRow[];
   if (versions.length === 0) return null;
 
