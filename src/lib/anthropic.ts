@@ -1,6 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { serializeMarkdownForPrompt } from "./prompt";
+import { OPERATE_GUIDANCE, OPERATE_SCHEMA, ROUTE_SCHEMA } from "./schemas";
 import type { OperateResult, Operation, Project, RouteResult, SectionNode } from "./types";
+
+type ToolSchema = Anthropic.Tool["input_schema"];
 
 const ROUTE_MODEL = process.env.ROUTE_MODEL || "claude-haiku-4-5-20251001";
 const OPERATE_MODEL = process.env.OPERATE_MODEL || "claude-sonnet-5";
@@ -49,18 +52,7 @@ const ROUTE_TOOL: Anthropic.Tool = {
   name: "route_thought",
   description:
     "Decide which project a captured thought belongs to. Return MATCH with the project_id of an existing project when you are confident; NEW with a proposed name and one-line summary when the thought clearly starts a new project; or UNSURE when routing is ambiguous or low-confidence.",
-  input_schema: {
-    type: "object",
-    properties: {
-      decision: { type: "string", enum: ["MATCH", "NEW", "UNSURE"] },
-      project_id: { type: "string", description: "Required when decision is MATCH." },
-      name: { type: "string", description: "Proposed project name; required when decision is NEW." },
-      summary: { type: "string", description: "One-line project summary; required when decision is NEW." },
-      confidence: { type: "number", description: "0..1 confidence in this routing decision." },
-      rationale: { type: "string", description: "Brief reason for the decision." },
-    },
-    required: ["decision", "confidence"],
-  },
+  input_schema: ROUTE_SCHEMA as unknown as ToolSchema,
 };
 
 export async function route(rawText: string, projects: Project[]): Promise<RouteResult> {
@@ -89,60 +81,8 @@ export async function route(rawText: string, projects: Project[]): Promise<Route
 
 const OPERATE_TOOL: Anthropic.Tool = {
   name: "edit_document",
-  description: [
-    "Integrate a captured thought into a project's living documentation by returning a small list of discrete operations.",
-    "You OWN the document structure — create sections, extend or revise them, and occasionally restructure — but you express every change as an operation against stable section ids. Do NOT rewrite the whole document.",
-    "Prefer the smallest set of operations that cleanly files the thought. Merge into an existing section (append_to_section / revise_section) rather than creating a near-duplicate. Rewrite raw thoughts into clean, well-structured docs; surfacing open questions is encouraged.",
-    "If the thought is too vague to act on, or contradicts existing docs in a way you shouldn't silently resolve, return a single `flag` operation with a clarifying question instead of guessing.",
-  ].join("\n"),
-  input_schema: {
-    type: "object",
-    properties: {
-      operations: {
-        type: "array",
-        description: "Ordered operations to apply to the document tree.",
-        items: {
-          type: "object",
-          properties: {
-            op: {
-              type: "string",
-              enum: ["create_section", "append_to_section", "revise_section", "move_section", "flag"],
-            },
-            parent_id: {
-              type: ["string", "null"],
-              description: "create_section/move_section: parent section id, or null for a top-level section.",
-            },
-            section_id: {
-              type: "string",
-              description: "append_to_section/revise_section/move_section: id of the target section.",
-            },
-            title: { type: "string", description: "create_section: heading for the new section." },
-            body_markdown: {
-              type: "string",
-              description: "create_section/append_to_section: markdown body content.",
-            },
-            new_body_markdown: {
-              type: "string",
-              description: "revise_section: full replacement markdown body.",
-            },
-            position: {
-              type: "integer",
-              description: "create_section/move_section: 0-based index among siblings.",
-            },
-            reason: { type: "string", description: "flag: the clarifying question or reason to punt." },
-          },
-          required: ["op"],
-        },
-      },
-      rationale: { type: "string", description: "One or two sentences explaining the changes." },
-      updated_summary: {
-        type: "string",
-        description:
-          "Optional refreshed one-line project summary, if this thought materially changed what the project is about.",
-      },
-    },
-    required: ["operations", "rationale"],
-  },
+  description: OPERATE_GUIDANCE,
+  input_schema: OPERATE_SCHEMA as unknown as ToolSchema,
 };
 
 export async function decideOperations(

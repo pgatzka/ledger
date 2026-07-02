@@ -60,6 +60,28 @@ The app needs exactly one Anthropic credential, chosen by precedence:
 
 If both are set, the auth token wins.
 
+### Local inference with Ollama (no API key, no credits)
+
+Point the app at a local [Ollama](https://ollama.com) model instead of Anthropic. It uses
+Ollama's `/api/chat` with a JSON-schema `format`, so the model is held to the same
+structured operations contract — no key, no credits.
+
+```bash
+ollama pull llama3.1:8b          # any tool-capable / instruction-following model
+LLM_PROVIDER=ollama npm run dev  # or set OLLAMA_MODEL / OLLAMA_URL in .env.local
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_PROVIDER` | `anthropic` | Set to `ollama` to use local inference. Auto-selects `ollama` if `OLLAMA_MODEL`/`OLLAMA_URL` is set. |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL. |
+| `OLLAMA_MODEL` | `llama3.1:8b` | Model name (must support structured/JSON output). |
+
+Quality depends on the model — small local models route and structure less reliably than
+Claude, so expect more Inbox/flag outcomes. Both the Route and Operate stages use the same
+`OLLAMA_MODEL`. For Docker, set `OLLAMA_URL=http://host.docker.internal:11434` so the
+container can reach Ollama on the host.
+
 ### Environment
 
 | Variable | Default | Purpose |
