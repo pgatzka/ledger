@@ -87,6 +87,33 @@ test → build, on Node 22. It's fully offline and needs no secrets. To un-skip 
 pipeline integration test in CI, add an `ANTHROPIC_API_KEY` repository secret and
 uncomment the `env` block in the workflow.
 
+## Deploy (Docker → GHCR)
+
+CD (`.github/workflows/cd.yml`) builds a production Docker image and publishes it to
+GitHub Container Registry on every push to `main`/the working branch and on `v*` tags
+(gated on the test suite passing). No external account or secret is required — it uses
+the built-in `GITHUB_TOKEN`.
+
+Image: `ghcr.io/pgatzka/ledger`. Tags: branch name, `sha-<short>`, `latest` (default
+branch), and the semver on version tags.
+
+Run it with a mounted volume for the SQLite database and your API key:
+
+```bash
+docker run -p 3000:3000 \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -v ledger-data:/app/data \
+  ghcr.io/pgatzka/ledger:latest
+```
+
+The image is a slim Next.js `standalone` build; the DB lives at `/app/data/ledger.db`
+on the volume (`DATABASE_PATH` is preset). The GHCR package is **private by default** —
+make it public in the repo's Packages settings if you want unauthenticated pulls.
+
+This publishes a deployable artifact; it doesn't stand up a live URL on its own. A
+`deploy` step (Fly.io / Render / SSH to a host with the volume) can be appended to the
+CD workflow once a host is chosen.
+
 ## Roadmap (not in the MVP)
 
 Outline-first retrieval for large docs, a clarifying-question loop, a provenance
