@@ -40,15 +40,32 @@ Undo affordance; ambiguous thoughts wait in the Inbox.
 
 ```bash
 npm install
-cp .env.example .env.local     # then add your ANTHROPIC_API_KEY
+cp .env.example .env.local     # then add ONE Anthropic credential (see Auth below)
 npm run dev                     # http://localhost:3000
 ```
+
+### Auth: subscription vs. API credits
+
+The app needs exactly one Anthropic credential, chosen by precedence:
+
+- **`ANTHROPIC_AUTH_TOKEN`** — a Claude **subscription** token from `claude setup-token`
+  (requires a Max plan). Calls draw on your subscription usage, **not** prepaid API
+  credits. The app sends it as a Bearer token with the `oauth-2025-04-20` beta header.
+  ⚠️ Driving a third-party app off subscription OAuth is a gray area of Anthropic's usage
+  policy and the endpoint can change without notice — it's your account and token, use at
+  your discretion.
+- **`ANTHROPIC_API_KEY`** — a standard API key. Uses prepaid **API credits** (usage-billed;
+  Haiku routing + Sonnet ops is a few cents per thought). This is the officially supported
+  path; add credits under Plans & Billing in the Anthropic Console.
+
+If both are set, the auth token wins.
 
 ### Environment
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | **Required.** Your Anthropic API key. |
+| `ANTHROPIC_AUTH_TOKEN` | — | Claude subscription token (`claude setup-token`). Preferred if set — see Auth above. |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key. Used if no auth token is set. One of the two is required. |
 | `ROUTE_MODEL` | `claude-haiku-4-5-20251001` | Cheap routing classification. |
 | `OPERATE_MODEL` | `claude-sonnet-5` | The document-editing decision. |
 | `ROUTE_CONFIDENCE_THRESHOLD` | `0.6` | Below this, thoughts go to the Inbox. |
@@ -114,11 +131,11 @@ make it public in the repo's Packages settings if you want unauthenticated pulls
 
 A ready-to-run `compose.yaml` is included. It builds the image from this repo (swap in
 the published `image:` line to pull from GHCR instead), mounts a named volume for the DB,
-and reads your key from a local `.env`:
+and reads your credential from a local `.env` (set one — see Auth above):
 
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env   # auto-loaded by Compose
-docker compose up --build                    # add -d to detach → http://localhost:3000
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env    # or ANTHROPIC_AUTH_TOKEN=sk-ant-oat01-...
+docker compose up --build                     # add -d to detach → http://localhost:3000
 ```
 
 ```yaml
@@ -127,7 +144,8 @@ services:
     build: .                        # or: image: ghcr.io/pgatzka/ledger:latest
     ports: ["3000:3000"]
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?create a .env file with ANTHROPIC_API_KEY}
+      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}   # subscription usage, or…
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}         # …API credits (set one)
     volumes:
       - ledger-data:/app/data       # persists the SQLite DB across restarts
     restart: unless-stopped

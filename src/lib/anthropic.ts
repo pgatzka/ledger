@@ -8,10 +8,25 @@ const OPERATE_MODEL = process.env.OPERATE_MODEL || "claude-sonnet-5";
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
   if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not set. Copy .env.example to .env.local and add your key.");
+    // Prefer a Claude subscription OAuth token (mint via `claude setup-token`)
+    // so calls draw on subscription usage instead of prepaid API credits. Fall
+    // back to a standard API key. See README "Auth" for the trade-offs.
+    const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    if (authToken) {
+      // apiKey: null stops the SDK from also reading ANTHROPIC_API_KEY from the
+      // env and sending both auth headers (which the API rejects).
+      client = new Anthropic({
+        apiKey: null,
+        authToken,
+        defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
+      });
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      client = new Anthropic();
+    } else {
+      throw new Error(
+        "No Anthropic credentials. Set ANTHROPIC_AUTH_TOKEN (a Claude subscription token from `claude setup-token`, to use subscription usage) or ANTHROPIC_API_KEY (uses prepaid API credits). See .env.example.",
+      );
     }
-    client = new Anthropic();
   }
   return client;
 }

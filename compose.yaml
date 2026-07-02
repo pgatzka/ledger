@@ -15,8 +15,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Required — provided via a local .env file (auto-loaded by Compose).
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?create a .env file with ANTHROPIC_API_KEY}
+      # Provide ONE of these via a local .env file (auto-loaded by Compose).
+      # The app prefers the subscription token; see the README "Auth" section.
+      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Optional overrides (defaults are baked into the image):
       # ROUTE_MODEL: claude-haiku-4-5-20251001
       # OPERATE_MODEL: claude-sonnet-5
