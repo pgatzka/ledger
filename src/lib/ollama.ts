@@ -6,8 +6,19 @@ import type { OperateResult, Operation, Project, RouteResult, SectionNode } from
 // /api/chat with a JSON `format` schema so the model is constrained to the
 // structured operations contract in ./schemas — no API key, no credits.
 // Env is read per-call so OLLAMA_URL / OLLAMA_MODEL can change without a restart.
-const ollamaUrl = () => (process.env.OLLAMA_URL || "http://localhost:11434").replace(/\/$/, "");
 const ollamaModel = () => process.env.OLLAMA_MODEL || "llama3.1:8b";
+
+// Normalize OLLAMA_URL to the server root, then callers append the API path.
+// Tolerates a full endpoint pasted from a curl/OpenAI example (e.g.
+// http://host:11434/api/chat or /v1) so we don't end up POSTing to
+// `.../api/chat/api/chat` (which Ollama 404s). A reverse-proxy path prefix is
+// preserved — only a trailing API segment is stripped.
+function ollamaBase(): string {
+  return (process.env.OLLAMA_URL || "http://localhost:11434")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/(api\/chat|api\/generate|api|v1)$/i, "");
+}
 
 interface OllamaChatResponse {
   message?: { content?: string };
@@ -16,10 +27,10 @@ interface OllamaChatResponse {
 
 /** One structured, non-streaming chat turn; returns the parsed JSON object. */
 async function chatJson<T>(system: string, user: string, schema: unknown): Promise<T> {
-  const base = ollamaUrl();
+  const url = `${ollamaBase()}/api/chat`;
   let res: Response;
   try {
-    res = await fetch(`${base}/api/chat`, {
+    res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -35,12 +46,12 @@ async function chatJson<T>(system: string, user: string, schema: unknown): Promi
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(`Could not reach Ollama at ${base}. Is it running? (${detail})`);
+    throw new Error(`Could not reach Ollama at ${url}. Is it running? (${detail})`);
   }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Ollama HTTP ${res.status}: ${body || res.statusText}`);
+    throw new Error(`Ollama HTTP ${res.status} at ${url}: ${body || res.statusText}`);
   }
 
   const data = (await res.json()) as OllamaChatResponse;

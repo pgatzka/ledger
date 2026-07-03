@@ -55,6 +55,18 @@ describe("ollama provider", () => {
     assert.equal(r.rationale, "new feature");
   });
 
+  it("tolerates a full endpoint path in OLLAMA_URL (strips /api/chat)", async () => {
+    const { port } = server.address() as AddressInfo;
+    const prev = process.env.OLLAMA_URL;
+    process.env.OLLAMA_URL = `http://127.0.0.1:${port}/api/chat`; // as pasted from a curl
+    try {
+      const r = await ollama.route("thought", []);
+      assert.equal(r.decision, "NEW"); // request landed on the fake server's /api/chat
+    } finally {
+      process.env.OLLAMA_URL = prev;
+    }
+  });
+
   it("surfaces a clear error when Ollama is unreachable", async () => {
     const prev = process.env.OLLAMA_URL;
     process.env.OLLAMA_URL = "http://127.0.0.1:1"; // nothing listening

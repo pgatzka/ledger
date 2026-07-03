@@ -59,7 +59,7 @@ npm run dev                       # http://localhost:3000
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL. |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama server **base** URL — no `/api` path (a trailing `/api/chat` is tolerated). |
 | `OLLAMA_MODEL` | `llama3.1:8b` | Model name (must support structured/JSON output). Used for both the Route and Operate stages. |
 | `ROUTE_CONFIDENCE_THRESHOLD` | `0.6` | Below this, thoughts go to the Inbox. |
 | `DATABASE_PATH` | `./data/ledger.db` | SQLite file location. |
