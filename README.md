@@ -7,6 +7,8 @@ You write *"for the fitness tracker it'd be cool to have a diagram of calorie
 intake over the last 30 days"* → it lands in the right project, in the right
 section, rewritten as clean docs.
 
+Runs entirely on a **local [Ollama](https://ollama.com) model** — no API key, no credits.
+
 ## How it works
 
 The system is **event-sourced**: your thoughts are an immutable, append-only log
@@ -33,84 +35,37 @@ Undo affordance; ambiguous thoughts wait in the Inbox.
   markdown doc pane (`src/app`).
 - **SQLite** via `better-sqlite3` (`db/schema.sql`, `src/lib/db.ts`) — projects,
   the immutable thought log, and version snapshots.
-- **Pluggable LLM providers** (`src/lib/llm.ts` selects by `LLM_PROVIDER`) — either
-  **Anthropic** (`src/lib/anthropic.ts`, structured JSON via forced tool use; Haiku
-  routes, Sonnet operates) or **local Ollama** (`src/lib/ollama.ts`, `/api/chat` with
-  a JSON-schema `format`). Both are held to the same response contract
-  (`src/lib/schemas.ts`), so the pipeline is provider-agnostic.
+- **Ollama** (`src/lib/ollama.ts`) — local inference via `/api/chat` with a JSON-schema
+  `format`, so the model is held to a structured operations contract
+  (`src/lib/schemas.ts`) that our code then applies deterministically.
 
 ## Getting started
 
+You need [Ollama](https://ollama.com) running with a model pulled:
+
+```bash
+ollama pull llama3.1:8b          # any instruction-following model with JSON output
+```
+
+Then:
+
 ```bash
 npm install
-cp .env.example .env.local     # then pick an LLM backend: an Anthropic credential
-                               # (see Auth) OR local Ollama (see below) — one is required
-npm run dev                     # http://localhost:3000
+cp .env.example .env.local       # defaults point at http://localhost:11434
+npm run dev                       # http://localhost:3000
 ```
-
-### Auth: subscription vs. API credits
-
-The app needs exactly one Anthropic credential, chosen by precedence:
-
-- **`ANTHROPIC_AUTH_TOKEN`** — a Claude **subscription** token from `claude setup-token`
-  (requires a Max plan). Calls draw on your subscription usage, **not** prepaid API
-  credits. The app sends it as a Bearer token with the `oauth-2025-04-20` beta header.
-  ⚠️ Driving a third-party app off subscription OAuth is a gray area of Anthropic's usage
-  policy and the endpoint can change without notice — it's your account and token, use at
-  your discretion.
-- **`ANTHROPIC_API_KEY`** — a standard API key. Uses prepaid **API credits** (usage-billed;
-  Haiku routing + Sonnet ops is a few cents per thought). This is the officially supported
-  path; add credits under Plans & Billing in the Anthropic Console.
-
-If both are set, the auth token wins.
-
-### Local inference with Ollama (no API key, no credits)
-
-Point the app at a local [Ollama](https://ollama.com) model instead of Anthropic. It uses
-Ollama's `/api/chat` with a JSON-schema `format`, so the model is held to the same
-structured operations contract — no key, no credits.
-
-```bash
-ollama pull llama3.1:8b          # any tool-capable / instruction-following model
-LLM_PROVIDER=ollama npm run dev  # or set OLLAMA_MODEL / OLLAMA_URL in .env.local
-```
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `LLM_PROVIDER` | `anthropic` | Set to `ollama` to use local inference. Auto-selects `ollama` if `OLLAMA_MODEL`/`OLLAMA_URL` is set. |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL. |
-| `OLLAMA_MODEL` | `llama3.1:8b` | Model name (must support structured/JSON output). |
-
-Quality depends on the model — small local models route and structure less reliably than
-Claude, so expect more Inbox/flag outcomes. Both the Route and Operate stages use the same
-`OLLAMA_MODEL`.
-
-**Fully local with Docker Compose** — the included `compose.yaml` ships an optional `ollama`
-service (behind the `ollama` profile). To run the app and Ollama together with no API key:
-
-```bash
-# 1. Uncomment the LLM_PROVIDER / OLLAMA_* lines under `app` in compose.yaml
-# 2. Start both services (the profile enables the ollama service):
-docker compose --profile ollama up -d --build
-# 3. Pull a model into the ollama container (one-time):
-docker compose exec ollama ollama pull llama3.1:8b
-# → http://localhost:3000
-```
-
-The app reaches Ollama at `http://ollama:11434` (the compose service name); models persist
-on the `ollama-models` volume. To use an Ollama already running on your **host** instead of
-the bundled service, set `OLLAMA_URL=http://host.docker.internal:11434` and skip the profile.
 
 ### Environment
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_AUTH_TOKEN` | — | Claude subscription token (`claude setup-token`). Preferred if set — see Auth above. |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key. Used if no auth token is set. One Anthropic credential is required **when using the Anthropic provider** (not needed with Ollama). |
-| `ROUTE_MODEL` | `claude-haiku-4-5-20251001` | Cheap routing classification. |
-| `OPERATE_MODEL` | `claude-sonnet-5` | The document-editing decision. |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL. |
+| `OLLAMA_MODEL` | `llama3.1:8b` | Model name (must support structured/JSON output). Used for both the Route and Operate stages. |
 | `ROUTE_CONFIDENCE_THRESHOLD` | `0.6` | Below this, thoughts go to the Inbox. |
 | `DATABASE_PATH` | `./data/ledger.db` | SQLite file location. |
+
+Quality depends on the model — small local models route and structure less reliably, so
+expect more Inbox/flag outcomes. A larger local model behaves better.
 
 ## Try it
 
@@ -130,7 +85,8 @@ npm run test:watch
 ```
 
 Uses Node's built-in test runner (`node --test`) with TypeScript type-stripping —
-no jest/vitest, no extra dependencies. Requires Node 22.
+no jest/vitest, no extra dependencies. Requires Node 22. Every test is offline and
+deterministic (in-process stand-in servers; no model or secret needed).
 
 - `test/tree.test.ts` — the deterministic operation engine (create/append/revise/
   move/flag, immutability, provenance, missing-id resilience, markdown output).
@@ -138,16 +94,11 @@ no jest/vitest, no extra dependencies. Requires Node 22.
   immutable-log invariant, and version snapshots + undo.
 - `test/ollama.test.ts` — the Ollama provider against a stand-in `/api/chat` server:
   `route()` / `decideOperations()` JSON parsing and the unreachable-server error path.
-- `test/pipeline.test.ts` — full capture→route→operate→apply loop. Makes live
-  Anthropic calls, so it **auto-skips unless `ANTHROPIC_API_KEY` is set** (runs
-  locally with a key; skipped in CI).
-
-The suite is offline and deterministic (16 pass, 1 skipped without a key).
+- `test/pipeline.test.ts` — the full capture→route→operate→apply loop against a stand-in
+  Ollama server: a thought routes to a new project and the section is applied + persisted.
 
 CI runs on every push and PR (`.github/workflows/ci.yml`): `npm ci` → lint →
-test → build, on Node 22. It's fully offline and needs no secrets. To un-skip the
-pipeline integration test in CI, add an `ANTHROPIC_API_KEY` repository secret and
-uncomment the `env` block in the workflow.
+test → build, on Node 22. Fully offline, no secrets.
 
 ## Deploy (Docker → GHCR)
 
@@ -158,13 +109,12 @@ passing). No external account or secret is required — it uses the built-in `GI
 Image: `ghcr.io/pgatzka/ledger`. Tags: branch name, `sha-<short>`, `latest` (default
 branch), and the semver on version tags.
 
-Run it with a mounted volume for the SQLite database and one LLM credential — an API
-key (below), a subscription token (`ANTHROPIC_AUTH_TOKEN`), or point it at Ollama (see
-Auth and the Ollama section):
+Run it with a mounted volume for the SQLite database, pointed at an Ollama server:
 
 ```bash
 docker run -p 3000:3000 \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  -e OLLAMA_MODEL=llama3.1:8b \
   -v ledger-data:/app/data \
   ghcr.io/pgatzka/ledger:latest
 ```
@@ -173,15 +123,13 @@ The image is a slim Next.js `standalone` build; the DB lives at `/app/data/ledge
 on the volume (`DATABASE_PATH` is preset). The GHCR package is **private by default** —
 make it public in the repo's Packages settings if you want unauthenticated pulls.
 
-### Docker Compose
+### Docker Compose (app + Ollama, turnkey)
 
-A ready-to-run `compose.yaml` is included. It builds the image from this repo (swap in
-the published `image:` line to pull from GHCR instead), mounts a named volume for the DB,
-and reads your credential from a local `.env` (set one — see Auth above):
+The included `compose.yaml` brings up the app **and** a local Ollama server, and pulls the
+model automatically on first start (no manual `ollama pull`):
 
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env    # or ANTHROPIC_AUTH_TOKEN=sk-ant-oat01-...
-docker compose up --build                     # add -d to detach → http://localhost:3000
+docker compose up --build         # add -d to detach → http://localhost:3000
 ```
 
 ```yaml
@@ -190,32 +138,35 @@ services:
     build: .                        # or: image: ghcr.io/pgatzka/ledger:latest
     ports: ["3000:3000"]
     environment:
-      # Local Ollama (uncomment; run with `--profile ollama`):
-      # LLM_PROVIDER: ollama
-      # OLLAMA_URL: http://ollama:11434
-      # OLLAMA_MODEL: llama3.1:8b
-      # Anthropic (default) — set ONE:
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}   # subscription usage, or…
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}         # …API credits
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.1:8b
     volumes:
       - ledger-data:/app/data       # persists the SQLite DB across restarts
+    depends_on: [ollama]
     restart: unless-stopped
 
-  ollama:                           # optional local model server (profile-gated)
+  ollama:
     image: ollama/ollama
-    profiles: ["ollama"]
     ports: ["11434:11434"]
     volumes:
       - ollama-models:/root/.ollama
     restart: unless-stopped
+
+  ollama-pull:                      # one-shot: pulls the model, then exits
+    image: ollama/ollama
+    depends_on: [ollama]
+    environment: { OLLAMA_HOST: http://ollama:11434 }
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull llama3.1:8b"]
+    restart: "no"
 
 volumes:
   ledger-data:
   ollama-models:
 ```
 
-Stop with `docker compose down` (the `ledger-data` volume — and your docs — persist);
-add `-v` only if you want to wipe the database.
+Stop with `docker compose down` (the volumes — your docs and pulled model — persist);
+add `-v` only if you want to wipe them.
 
 This publishes a deployable artifact; it doesn't stand up a live URL on its own. A
 `deploy` step (Fly.io / Render / SSH to a host with the volume) can be appended to the

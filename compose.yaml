@@ -1,14 +1,8 @@
-# Run Thought-to-Docs with Docker Compose.
+# Run Thought-to-Docs with Docker Compose — app + a local Ollama model server.
 #
-# Anthropic (default):
-#   echo "ANTHROPIC_API_KEY=sk-ant-..." > .env   # or ANTHROPIC_AUTH_TOKEN=sk-ant-oat01-...
-#   docker compose up --build                    # http://localhost:3000  (add -d to detach)
+#   docker compose up --build     # http://localhost:3000  (add -d to detach)
 #
-# Fully local with Ollama (no API key, no credits):
-#   1. Uncomment the three OLLAMA_* / LLM_PROVIDER lines under `app` below.
-#   2. docker compose --profile ollama up -d --build
-#   3. docker compose exec ollama ollama pull llama3.1:8b   # one-time model download
-#
+# `ollama-pull` downloads the model on first start, so no manual step is needed.
 # Data persists on named volumes across `docker compose down` (add -v to wipe).
 
 services:
@@ -20,35 +14,36 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # --- Option 1: local Ollama (uncomment; run with `--profile ollama`) ---
-      # LLM_PROVIDER: ollama
-      # OLLAMA_URL: http://ollama:11434     # the `ollama` service below
-      # OLLAMA_MODEL: llama3.1:8b
-      #
-      # --- Option 2: Anthropic (default) — set ONE in a local .env file ------
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # Optional overrides (defaults are baked into the image):
-      # ROUTE_MODEL: claude-haiku-4-5-20251001
-      # OPERATE_MODEL: claude-sonnet-5
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.1:8b
       # ROUTE_CONFIDENCE_THRESHOLD: "0.6"
     volumes:
       # Persists /app/data/ledger.db (DATABASE_PATH is preset in the image).
       - ledger-data:/app/data
+    depends_on:
+      - ollama
     restart: unless-stopped
 
-  # Optional local model server. Only started when the `ollama` profile is on:
-  #   docker compose --profile ollama up
-  # After it's up, pull a model once:
-  #   docker compose exec ollama ollama pull llama3.1:8b
+  # Local model server. Models persist on the ollama-models volume.
   ollama:
     image: ollama/ollama
-    profiles: ["ollama"]
     ports:
       - "11434:11434"
     volumes:
       - ollama-models:/root/.ollama
     restart: unless-stopped
+
+  # One-shot: wait for the server, then pull the model so the app works
+  # out of the box. Exits when done; safe to re-run (pull is cached).
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull llama3.1:8b"]
+    restart: "no"
 
 volumes:
   ledger-data:

@@ -1,7 +1,6 @@
-// JSON Schemas for the two structured LLM responses. Shared by both providers:
-// Anthropic uses them as a tool `input_schema` (forced tool_choice); Ollama uses
-// them as the `format` constraint on /api/chat. Keeping one definition avoids the
-// two providers drifting apart.
+// JSON Schemas for the two structured LLM responses (Route and Operate). Ollama
+// uses them as the `format` constraint on /api/chat so the model's output is held
+// to this exact shape; the pipeline then applies it deterministically.
 
 export const ROUTE_SCHEMA = {
   type: "object",

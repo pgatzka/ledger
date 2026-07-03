@@ -11,7 +11,6 @@
     "test:watch": "node --experimental-strip-types --import ./test/register-hooks.mjs --test --watch 'test/*.test.ts'"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
     "better-sqlite3": "^12.4.1",
     "next": "^15.5.7",
     "react": "^19.0.0",

@@ -1,4 +1,4 @@
-import { decideOperations, route } from "./llm";
+import { decideOperations, route } from "./ollama";
 import {
   createProject,
   createThought,

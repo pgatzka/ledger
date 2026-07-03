@@ -2,9 +2,9 @@ import { serializeMarkdownForPrompt } from "./prompt";
 import { OPERATE_GUIDANCE, OPERATE_SCHEMA, ROUTE_SCHEMA } from "./schemas";
 import type { OperateResult, Operation, Project, RouteResult, SectionNode } from "./types";
 
-// Local inference via Ollama (https://ollama.com). Uses /api/chat with a JSON
-// `format` schema so the model is constrained to the same structured contract
-// the Anthropic provider gets from forced tool use — no API key, no credits.
+// Local inference via Ollama (https://ollama.com), the app's LLM backend. Uses
+// /api/chat with a JSON `format` schema so the model is constrained to the
+// structured operations contract in ./schemas — no API key, no credits.
 // Env is read per-call so OLLAMA_URL / OLLAMA_MODEL can change without a restart.
 const ollamaUrl = () => (process.env.OLLAMA_URL || "http://localhost:11434").replace(/\/$/, "");
 const ollamaModel = () => process.env.OLLAMA_MODEL || "llama3.1:8b";
@@ -87,7 +87,7 @@ export async function decideOperations(
   const user = `Project: ${projectName}\n\nCurrent document (section ids in brackets):\n\n${doc}\n\nNew thought to integrate:\n"""${rawText}"""`;
 
   const result = await chatJson<OperateResult>(system, user, OPERATE_SCHEMA);
-  // Defensive: keep only well-formed operations (mirrors the Anthropic provider).
+  // Defensive: keep only well-formed operations before the pipeline applies them.
   result.operations = (result.operations || []).filter(
     (o): o is Operation => !!o && typeof (o as Operation).op === "string",
   );

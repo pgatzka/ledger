@@ -23,12 +23,9 @@ jobs:
         run: npm run lint
 
       - name: Test
-        # Deterministic + offline. The pipeline integration test auto-skips
-        # unless ANTHROPIC_API_KEY is provided. To un-skip it, add the key as a
-        # repository secret and uncomment the env block below.
+        # Deterministic + offline — every test uses in-process stand-in servers,
+        # so no network, model, or secret is required.
         run: npm test
-        # env:
-        #   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Build
         run: npm run build
